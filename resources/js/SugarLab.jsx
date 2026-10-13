@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, BookOpen, Calculator, CheckCircle2, ChevronRight, FlaskConical, History, LogOut, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { BarChart3, BookOpen, Calculator, CheckCircle2, ChevronRight, FlaskConical, History, LogOut, Search, ShieldCheck, UserPlus, X } from 'lucide-react';
 
 const emptyLane = { student_name: '', sample_name: '', weight: '', aliquot: '50', standard_factor: '0.0025', fehling_volume: '', sample_volume: '', spiked_sugar_percent: '', sample_sugar_percent: '', sugar_added_percent: '' };
 const emptyAsh = { student_name: '', sample_name: '', crucible_weight: '', sample_weight: '', ash_weight: '' };
@@ -92,6 +92,8 @@ function LabApp({ user, onUserChange, onLogout }) {
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState('overview');
     const [allSessions, setAllSessions] = useState([]);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [sessionsError, setSessionsError] = useState('');
 
     useEffect(() => {
         Promise.all([fetch('/api/dashboard').then((res) => res.json()), fetch('/api/experiments').then((res) => res.json())])
@@ -99,7 +101,24 @@ function LabApp({ user, onUserChange, onLogout }) {
     }, []);
 
     const refreshDashboard = () => fetch('/api/dashboard').then((res) => res.json()).then(setDashboard);
-    const showResults = () => { setView('results'); fetch(user.role === 'teacher' ? '/api/teacher/sessions' : '/api/sessions').then((res) => res.json()).then((data) => setAllSessions(data.sessions ?? [])); };
+    const loadSessions = async (nextView) => {
+        setView(nextView);
+        setSessionsLoading(true);
+        setSessionsError('');
+        try {
+            const response = await fetch(user.role === 'teacher' ? '/api/teacher/sessions' : '/api/sessions');
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Unable to load practical sessions.');
+            setAllSessions(data.sessions ?? []);
+        } catch (error) {
+            setAllSessions([]);
+            setSessionsError(error.message || 'Unable to load practical sessions.');
+        } finally {
+            setSessionsLoading(false);
+        }
+    };
+    const showProgress = () => loadSessions('sessions');
+    const showResults = () => loadSessions('results');
     const showResources = () => setView('resources');
     const showSettings = () => setView('settings');
     const openExperiment = (id) => { setResult(null); setActive(id); };
@@ -113,13 +132,13 @@ function LabApp({ user, onUserChange, onLogout }) {
     };
 
     return <div className="shell">
-        <header className="topbar"><div className="brand"><span className="brand-mark">SL</span><span><strong>Sugar Lab / 8211</strong><small>Sugarcane Processing and Sugar Technology</small></span></div><div className="institution"><span className="institution-seal">MU</span><span>MBEYA UNIVERSITY OF SCIENCE<br />AND TECHNOLOGY</span><i /> <span>Food Sciences<br />Department</span><span className="profile-dot" title={user.name}>{user.name.slice(0, 1).toUpperCase()}</span><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={14} /> <span>Sign out</span></button></div></header>
+        <header className="topbar"><div className="brand"><span className="brand-mark">SL</span><span><strong>Sugar Lab / 8211</strong><small>Sugarcane Processing and Sugar Technology</small></span></div><div className="institution"><span className="institution-seal">MUST</span><span>MBEYA UNIVERSITY OF SCIENCE<br />AND TECHNOLOGY</span><i /> <span>Food Sciences<br />Department</span><span className="profile-dot" title={user.name}>{user.name.slice(0, 1).toUpperCase()}</span><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={14} /> <span>Sign out</span></button></div></header>
         <div className="layout">
             <aside className="sidebar"><div className="eyebrow">Practical manual</div><nav className="nav">
-                <button className={`nav-item ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}><BookOpen size={16} /> Home</button><button className={`nav-item ${view === 'experiments' ? 'active' : ''}`} onClick={() => setView('experiments')}><FlaskConical size={16} /> Experiments</button><button className={`nav-item ${view === 'sessions' ? 'active' : ''}`} onClick={() => setView('sessions')}><History size={16} /> My Progress</button><button className={`nav-item ${view === 'results' ? 'active' : ''}`} onClick={showResults}><BarChart3 size={16} /> {user.role === 'teacher' ? 'All Experiments' : 'Results'}</button><button className={`nav-item ${view === 'safety' ? 'active' : ''}`} onClick={() => setView('safety')}><ShieldCheck size={16} /> Safety & Emergency</button><button className={`nav-item ${view === 'resources' ? 'active' : ''}`} onClick={showResources}><BookOpen size={16} /> Resources</button><button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={showSettings}><span className="nav-gear">⚙</span> Settings</button>
+                <button className={`nav-item ${view === 'overview' ? 'active' : ''}`} onClick={() => setView('overview')}><BookOpen size={16} /> Home</button><button className={`nav-item ${view === 'experiments' ? 'active' : ''}`} onClick={() => setView('experiments')}><FlaskConical size={16} /> Experiments</button><button className={`nav-item ${view === 'sessions' ? 'active' : ''}`} onClick={showProgress}><History size={16} /> {user.role === 'teacher' ? 'Progress' : 'My Progress'}</button><button className={`nav-item ${view === 'results' ? 'active' : ''}`} onClick={showResults}><BarChart3 size={16} /> {user.role === 'teacher' ? 'All Experiments' : 'Results'}</button><button className={`nav-item ${view === 'safety' ? 'active' : ''}`} onClick={() => setView('safety')}><ShieldCheck size={16} /> Safety & Emergency</button><button className={`nav-item ${view === 'resources' ? 'active' : ''}`} onClick={showResources}><BookOpen size={16} /> Resources</button><button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={showSettings}><span className="nav-gear">⚙</span> Settings</button>
             </nav><div className="side-foot"><strong><ShieldCheck size={15} /> Safety First</strong><br />Review the safety briefing before handling any simulated reagent or heated apparatus.</div></aside>
             <main className="main">
-                {view === 'safety' ? <SafetyView /> : view === 'resources' ? <ResourcesView /> : view === 'settings' ? <SettingsView user={user} onUserChange={onUserChange} /> : view === 'sessions' ? <SessionsView sessions={dashboard.recent_sessions} /> : view === 'results' ? <ResultsView sessions={allSessions} teacher={user.role === 'teacher'} /> : view === 'experiments' ? <ExperimentsView experiments={experiments} openExperiment={openExperiment} /> : <>
+                {view === 'safety' ? <SafetyView /> : view === 'resources' ? <ResourcesView /> : view === 'settings' ? <SettingsView user={user} onUserChange={onUserChange} /> : view === 'sessions' ? <SessionsView sessions={allSessions} teacher={user.role === 'teacher'} loading={sessionsLoading} error={sessionsError} /> : view === 'results' ? <ResultsView sessions={allSessions} teacher={user.role === 'teacher'} loading={sessionsLoading} error={sessionsError} /> : view === 'experiments' ? <ExperimentsView experiments={experiments} openExperiment={openExperiment} /> : <>
                 <section className="hero home-hero"><div><div className="eyebrow">Practical manual</div><h1>Sugarcane Processing and<br />Sugar Technology</h1><p>This interactive manual guides you through the practical procedures, materials, hazards and acceptance criteria for the AS 8211 practical program.</p></div><strong className="hero-quote">“Learn. Practice.<br />Achieve.”</strong></section>
                 <section className="stats"><Stat label="completed runs" value={dashboard.stats.completed ?? 0} /><Stat label="active sessions" value={dashboard.stats.in_progress ?? 0} /><Stat label="practical modules" value={dashboard.stats.experiments ?? 3} /><Stat label="safety checks" value={dashboard.stats.safety_items ?? 8} /></section>
                 <div className="section-head station-heading"><div><h2><FlaskConical size={22} /> Practical Stations</h2><span>Choose a practical to begin your laboratory session.</span></div></div>
@@ -140,7 +159,18 @@ function Stat({ label, value }) { return <div className="stat"><span className="
 
 function ExperimentsView({ experiments, openExperiment }) { return <><section className="hero"><div><div className="eyebrow">Manual modules</div><h1>Run each practical<br /><em>step by step.</em></h1></div><div className="hero-copy">Each station follows the procedures, materials, hazards, and acceptance criteria in the AS 8211 practical manual.</div></section><div className="experiments">{experiments.map((experiment) => <article className={`experiment ${experiment.accent}`} key={experiment.id}><div><span className="exp-number">PRACTICAL {experiment.number}</span><h3 className="exp-title">{experiment.title}</h3><p className="exp-desc">{experiment.description}</p></div><div className="exp-foot"><span>{experiment.type} · {experiment.duration}</span><button className="button" onClick={() => openExperiment(experiment.id)}>Open station <ChevronRight size={15} /></button></div></article>)}</div></>; }
 
-function SessionsView({ sessions }) { return <><section className="hero"><div><div className="eyebrow">Notebook archive</div><h1>Your practical<br /><em>sessions.</em></h1></div><div className="hero-copy">Every accepted calculation is kept with the readings used to produce it, ready to transfer into a practical report.</div></section><section className="sessions"><div className="session-row header"><span>Student / sample</span><span>Practical</span><span>Result</span><span>Status</span></div>{sessions.length === 0 ? <div className="session-row"><span>No completed sessions yet.</span><span>Run a practical to create your first record.</span></div> : sessions.map((session) => <div className="session-row" key={session.id}><span><strong>{session.student_name}</strong><br /><small>{session.sample_name}</small></span><span>{session.experiment === 'lane-eynon' ? 'Total sugar' : 'Ash'}</span><span>{session.result} {session.unit}</span><span className="pill">{session.status}</span></div>)}</section></>; }
+function SessionsView({ sessions, teacher, loading, error }) {
+    const [search, setSearch] = useState('');
+    const filteredSessions = sessions.filter((session) => {
+        const student = `${session.student_name ?? ''} ${session.user?.email ?? ''}`.toLowerCase();
+        return student.includes(search.trim().toLowerCase());
+    });
+    return <><section className="hero"><div><div className="eyebrow">{teacher ? 'Student notebook' : 'Notebook archive'}</div><h1>{teacher ? <>Student<br /><em>progress.</em></> : <>Your practical<br /><em>sessions.</em></>}</h1></div><div className="hero-copy">{teacher ? 'Review each student’s saved practical sessions and results.' : 'Every accepted calculation is kept with the readings used to produce it, ready to transfer into a practical report.'}</div></section>{teacher && <SearchField value={search} onChange={setSearch} placeholder="Search students by name or email..." label="Search students" />}{error && <div className="auth-error">{error}</div>}{loading ? <div className="empty-results">Loading practical sessions...</div> : <section className="sessions"><div className="session-row header"><span>Student / sample</span><span>Practical</span><span>Result</span><span>Status</span></div>{filteredSessions.length === 0 ? <div className="session-row"><span>{search ? 'No students match your search.' : 'No completed sessions yet.'}</span><span>{search ? 'Try another name or email.' : 'Run a practical to create your first record.'}</span></div> : filteredSessions.map((session) => <div className="session-row" key={session.id}><span><strong>{session.student_name}</strong><br /><small>{session.sample_name}</small></span><span>{session.experiment === 'lane-eynon' ? 'Total sugar' : 'Ash'}</span><span>{session.result} {session.unit}</span><span className="pill">{session.status}</span></div>)}</section>}</>;
+}
+
+function SearchField({ value, onChange, placeholder, label }) {
+    return <label className="search-field"><Search size={17} aria-hidden="true" /><span className="sr-only">{label}</span><input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /></label>;
+}
 
 function ResourcesView() {
     const resources = [
@@ -170,11 +200,17 @@ function SettingsView({ user, onUserChange }) {
     return <><section className="hero"><div><div className="eyebrow">Account settings</div><h1>Your profile<br /><em>your details.</em></h1></div><div className="hero-copy">Change the name and email shown on your practical records, or set a new password.</div></section><section className="settings-panel"><div className="settings-role"><span className="eyebrow">Account type</span><strong>{user.role === 'teacher' ? 'Teacher' : 'Student'}</strong></div>{message && <div className="notice">{message}</div>}{error && <div className="auth-error">{error}</div>}<form onSubmit={save}><div className="form-grid"><div className="field"><label htmlFor="profile-name">full name</label><input id="profile-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></div><div className="field"><label htmlFor="profile-email">email</label><input id="profile-email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></div><div className="field"><label htmlFor="profile-password">new password</label><input id="profile-password" type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Leave blank to keep current" /></div><div className="field"><label htmlFor="profile-password-confirmation">confirm new password</label><input id="profile-password-confirmation" type="password" value={form.password_confirmation} onChange={(event) => setForm({ ...form, password_confirmation: event.target.value })} /></div></div><div className="form-actions"><button className="button">Save profile</button></div></form></section></>;
 }
 
-function ResultsView({ sessions }) {
-    const sugar = sessions.filter((session) => session.experiment === 'lane-eynon');
-    const ash = sessions.filter((session) => session.experiment === 'ash');
+function ResultsView({ sessions, teacher, loading, error }) {
+    const [search, setSearch] = useState('');
+    const filteredSessions = sessions.filter((session) => {
+        const experimentName = session.experiment === 'lane-eynon' ? 'Total sugar Lane-Eynon' : 'Ash determination';
+        const searchable = `${session.student_name ?? ''} ${session.user?.email ?? ''} ${session.sample_name ?? ''} ${session.experiment ?? ''} ${experimentName} ${session.status ?? ''}`.toLowerCase();
+        return searchable.includes(search.trim().toLowerCase());
+    });
+    const sugar = filteredSessions.filter((session) => session.experiment === 'lane-eynon');
+    const ash = filteredSessions.filter((session) => session.experiment === 'ash');
     const average = (items) => items.length ? (items.reduce((sum, item) => sum + Number(item.result), 0) / items.length).toFixed(2) : '0.00';
-    return <><section className="hero"><div><div className="eyebrow">Results / analysis</div><h1>See what the<br /><em>lab found.</em></h1></div><div className="hero-copy">Compare completed simulations, inspect the recorded values, and use both trend and comparison views when several samples have been tested.</div></section><section className="stats result-stats"><Stat label="all results" value={sessions.length} /><Stat label="sugar analyses" value={sugar.length} /><Stat label="average sugar" value={`${average(sugar)} g`} /><Stat label="average ash" value={`${average(ash)} g`} /></section><div className="results-charts"><section className="chart-panel"><div className="section-head"><h2>Linear trend</h2><span className="eyebrow">sequence over time</span></div><ResultChart sessions={sessions} /></section><section className="chart-panel"><div className="section-head"><h2>Bar comparison</h2><span className="eyebrow">g per 100 g</span></div><BarChart sessions={sessions} /></section></div><section className="results-table"><div className="section-head"><h2>Recorded results</h2><span className="eyebrow">{sessions.length} entries</span></div>{sessions.length === 0 ? <div className="empty-results">No results yet. Complete a calculation from Experiments.</div> : sessions.map((session) => <div className="result-row" key={session.id}><div><strong>{session.sample_name}</strong><small>{session.student_name} · {session.experiment === 'lane-eynon' ? 'Total sugar' : 'Ash'}</small></div><strong>{session.result}</strong><span className="pill">{session.status}</span></div>)}</section></>;
+    return <><section className="hero"><div><div className="eyebrow">Results / analysis</div><h1>{teacher ? <>All student<br /><em>experiments.</em></> : <>See what the<br /><em>lab found.</em></>}</h1></div><div className="hero-copy">Compare completed simulations, inspect the recorded values, and use both trend and comparison views when several samples have been tested.</div></section>{teacher && <SearchField value={search} onChange={setSearch} placeholder="Search by student, sample, or experiment..." label="Search experiments" />}{error && <div className="auth-error">{error}</div>}{loading ? <div className="empty-results">Loading experiment results...</div> : <><section className="stats result-stats"><Stat label="all results" value={filteredSessions.length} /><Stat label="sugar analyses" value={sugar.length} /><Stat label="average sugar" value={`${average(sugar)} g`} /><Stat label="average ash" value={`${average(ash)} g`} /></section><div className="results-charts"><section className="chart-panel"><div className="section-head"><h2>Linear trend</h2><span className="eyebrow">sequence over time</span></div><ResultChart sessions={filteredSessions} /></section><section className="chart-panel"><div className="section-head"><h2>Bar comparison</h2><span className="eyebrow">g per 100 g</span></div><BarChart sessions={filteredSessions} /></section></div><section className="results-table"><div className="section-head"><h2>Recorded results</h2><span className="eyebrow">{filteredSessions.length} entries</span></div>{filteredSessions.length === 0 ? <div className="empty-results">{search ? 'No experiments match your search.' : 'No results yet. Complete a calculation from Experiments.'}</div> : filteredSessions.map((session) => <div className="result-row" key={session.id}><div><strong>{session.sample_name}</strong><small>{session.student_name} · {session.experiment === 'lane-eynon' ? 'Total sugar' : 'Ash'}</small></div><strong>{session.result}</strong><span className="pill">{session.status}</span></div>)}</section></>}</>;
 }
 
 function ResultChart({ sessions }) {
